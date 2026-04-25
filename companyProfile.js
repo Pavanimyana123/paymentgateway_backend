@@ -77,119 +77,167 @@ router.get("/company-profile", async (req, res) => {
     }
 });
 
-/* ================= UPDATE COMPANY PROFILE ================= */
-router.post("/company-profile", upload.single('company_logo'), async (req, res) => {
-    try {
-        const {
-            company_name,
-            company_email,
-            company_phone,
-            company_address,
-            company_city,
-            company_state,
-            company_country,
-            company_pincode,
-            company_gst,
-            company_pan,
-            company_website,
-            currency,
-            timezone,
-            environment
-        } = req.body;
+router.post(
+    "/company-profile",
+    upload.single("company_logo"),
+    async (req, res) => {
+        try {
+            /* ==========================
+               NORMALIZE BODY VALUES
+            ========================== */
+            const normalize = (v) => (v === undefined ? null : v);
 
-        // Check if profile exists
-        const [existingRows] = await db.execute(
-            `SELECT * FROM company_profile`
-        );
+            const {
+                company_name,
+                company_email,
+                company_phone,
+                company_address,
+                company_city,
+                company_state,
+                company_country,
+                company_pincode,
+                company_gst,
+                company_pan,
+                company_website,
+                currency,
+                timezone,
+                environment,
+            } = req.body;
 
-        let company_logo = null;
-        
-        // Handle file upload
-        if (req.file) {
-            company_logo = `/uploads/company-logos/${req.file.filename}`;
-            
-            // Delete old logo if exists
-            if (existingRows.length > 0 && existingRows[0].company_logo) {
-                const oldLogoPath = path.join(__dirname, '..', existingRows[0].company_logo);
-                if (fs.existsSync(oldLogoPath)) {
-                    fs.unlinkSync(oldLogoPath);
-                }
-            }
-        }
-
-        if (existingRows.length === 0) {
-            // Create new profile
-            await db.execute(
-                `INSERT INTO company_profile (
-                    company_name, company_email, company_phone, company_address,
-                    company_city, company_state, company_country, company_pincode,
-                    company_gst, company_pan, company_website, company_logo,
-                    currency, timezone, environment
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                [
-                    company_name, company_email, company_phone, company_address,
-                    company_city, company_state, company_country, company_pincode,
-                    company_gst, company_pan, company_website, company_logo,
-                    currency || 'INR', timezone || 'Asia/Kolkata', environment
-                ]
-            );
-        } else {
-            // Update existing profile
-            const updateFields = [];
-            const updateValues = [];
-
-            const fields = {
-                company_name, company_email, company_phone, company_address,
-                company_city, company_state, company_country, company_pincode,
-                company_gst, company_pan, company_website, currency, timezone, environment
+            const body = {
+                company_name: normalize(company_name),
+                company_email: normalize(company_email),
+                company_phone: normalize(company_phone),
+                company_address: normalize(company_address),
+                company_city: normalize(company_city),
+                company_state: normalize(company_state),
+                company_country: normalize(company_country),
+                company_pincode: normalize(company_pincode),
+                company_gst: normalize(company_gst),
+                company_pan: normalize(company_pan),
+                company_website: normalize(company_website),
+                currency: normalize(currency) || "INR",
+                timezone: normalize(timezone) || "Asia/Kolkata",
+                environment: normalize(environment) || "test",
             };
 
-            Object.keys(fields).forEach(key => {
-                if (fields[key] !== undefined) {
-                    updateFields.push(`${key} = ?`);
-                    updateValues.push(fields[key]);
-                }
-            });
+            /* ==========================
+               CHECK EXISTING PROFILE
+            ========================== */
+            const [existingRows] = await db.execute(
+                "SELECT * FROM company_profile LIMIT 1"
+            );
 
-            if (company_logo) {
-                updateFields.push('company_logo = ?');
-                updateValues.push(company_logo);
+            let company_logo = null;
+
+            /* ==========================
+               HANDLE FILE UPLOAD
+            ========================== */
+            if (req.file) {
+                company_logo = `/uploads/company-logos/${req.file.filename}`;
+
+                // delete old logo if exists
+                if (existingRows.length > 0 && existingRows[0].company_logo) {
+                    const oldLogoPath = path.join(
+                        __dirname,
+                        "..",
+                        existingRows[0].company_logo
+                    );
+
+                    if (fs.existsSync(oldLogoPath)) {
+                        fs.unlinkSync(oldLogoPath);
+                    }
+                }
             }
 
-            if (updateFields.length > 0) {
-                updateValues.push(existingRows[0].id);
+            /* ==========================
+               INSERT
+            ========================== */
+            if (existingRows.length === 0) {
                 await db.execute(
-                    `UPDATE company_profile SET ${updateFields.join(', ')} WHERE id = ?`,
-                    updateValues
+                    `INSERT INTO company_profile (
+            company_name, company_email, company_phone, company_address,
+            company_city, company_state, company_country, company_pincode,
+            company_gst, company_pan, company_website, company_logo,
+            currency, timezone, environment
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                    [
+                        body.company_name,
+                        body.company_email,
+                        body.company_phone,
+                        body.company_address,
+                        body.company_city,
+                        body.company_state,
+                        body.company_country,
+                        body.company_pincode,
+                        body.company_gst,
+                        body.company_pan,
+                        body.company_website,
+                        company_logo,
+                        body.currency,
+                        body.timezone,
+                        body.environment,
+                    ]
                 );
             }
+
+            /* ==========================
+               UPDATE
+            ========================== */
+            else {
+                const updateFields = [];
+                const updateValues = [];
+
+                Object.entries(body).forEach(([key, value]) => {
+                    if (value !== null) {
+                        updateFields.push(`${key} = ?`);
+                        updateValues.push(value);
+                    }
+                });
+
+                if (company_logo) {
+                    updateFields.push("company_logo = ?");
+                    updateValues.push(company_logo);
+                }
+
+                if (updateFields.length > 0) {
+                    updateValues.push(existingRows[0].id);
+
+                    await db.execute(
+                        `UPDATE company_profile 
+             SET ${updateFields.join(", ")} 
+             WHERE id = ?`,
+                        updateValues
+                    );
+                }
+            }
+
+            /* ==========================
+               RETURN UPDATED PROFILE
+            ========================== */
+            const [updatedRows] = await db.execute(
+                "SELECT * FROM company_profile ORDER BY id DESC LIMIT 1"
+            );
+
+            res.json({
+                success: true,
+                message: "Company profile updated successfully",
+                profile: updatedRows[0],
+            });
+        } catch (error) {
+            console.error("Error updating company profile:", error);
+
+            if (req.file && fs.existsSync(req.file.path)) {
+                fs.unlinkSync(req.file.path);
+            }
+
+            res.status(500).json({
+                success: false,
+                message: error.message || "Failed to update company profile",
+            });
         }
-
-        // Get updated profile
-        const [updatedRows] = await db.execute(
-            `SELECT * FROM company_profile ORDER BY id DESC LIMIT 1`
-        );
-
-        res.json({
-            success: true,
-            message: "Company profile updated successfully",
-            profile: updatedRows[0]
-        });
-
-    } catch (error) {
-        console.error("Error updating company profile:", error);
-        
-        // Delete uploaded file if error occurred
-        if (req.file) {
-            fs.unlinkSync(req.file.path);
-        }
-
-        res.status(500).json({
-            success: false,
-            message: error.message || "Failed to update company profile"
-        });
     }
-});
+);
 
 /* ================= DELETE COMPANY LOGO ================= */
 router.delete("/company-profile/logo", async (req, res) => {
@@ -269,24 +317,24 @@ router.get("/timezones", (req, res) => {
 });
 
 router.get("/transactions", async (req, res) => {
-  try {
-    const [rows] = await db.execute(`
+    try {
+        const [rows] = await db.execute(`
       SELECT * FROM transactions 
       ORDER BY created_at DESC
     `);
-    
-    res.json({
-      success: true,
-      transactions: rows,
-      total: rows.length
-    });
-  } catch (error) {
-    console.error("Error fetching transactions:", error);
-    res.status(500).json({
-      success: false,
-      message: "Failed to fetch transactions"
-    });
-  }
+
+        res.json({
+            success: true,
+            transactions: rows,
+            total: rows.length
+        });
+    } catch (error) {
+        console.error("Error fetching transactions:", error);
+        res.status(500).json({
+            success: false,
+            message: "Failed to fetch transactions"
+        });
+    }
 });
 
 module.exports = router;

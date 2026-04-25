@@ -12,7 +12,7 @@ const app = express();
 
 // 🔥 FIX: Configure CORS properly for Razorpay
 app.use(cors({
-  origin: ['https://api.razorpay.com', 'https://checkout.razorpay.com', 'http://localhost:3000', ],
+  origin: ['https://api.razorpay.com', 'https://checkout.razorpay.com', 'http://localhost:3000', 'http://localhost:3001', ],
   credentials: true,
   exposedHeaders: ['x-rtb-fingerprint-id'] // Allow Razorpay headers
 }));
